@@ -19,15 +19,19 @@ import {
 import {
   FileText,
   Calendar,
-  MessageSquare,
   LogOut,
   Plus,
   Edit,
   Save,
   Loader2,
   BookOpen,
-  User,
   Target,
+  Clock,
+  GraduationCap,
+  X,
+  Check,
+  ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -59,18 +63,52 @@ interface ClientProfile {
   status: string | null;
 }
 
+interface SchoolDeadline {
+  id: string;
+  school_name: string;
+  round_name: string;
+  deadline_date: string;
+}
+
+const AVAILABLE_SCHOOLS = [
+  'Harvard Business School',
+  'Stanford GSB',
+  'Wharton',
+  'MIT Sloan',
+  'Kellogg',
+  'Columbia Business School',
+  'Booth',
+  'INSEAD',
+  'Yale SOM',
+  'Duke Fuqua',
+  'NYU Stern',
+  'Berkeley Haas',
+  'LBS',
+  'ISB',
+  'IIM Ahmedabad',
+  'IIM Bangalore',
+  'IIM Calcutta',
+];
+
+const ROUNDS = ['Round 1', 'Round 2', 'Round 3', 'Early Decision', 'Merit Fellowship'];
+
 export default function ClientDashboard() {
   const navigate = useNavigate();
   const { user, role, signOut, loading: authLoading } = useAuth();
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [deadlines, setDeadlines] = useState<SchoolDeadline[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
   const [newDocTitle, setNewDocTitle] = useState('');
   const [newDocType, setNewDocType] = useState<string>('');
+  const [newDocSchool, setNewDocSchool] = useState<string>('');
   const [savingDocument, setSavingDocument] = useState(false);
+  const [isEditingSchools, setIsEditingSchools] = useState(false);
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+  const [selectedRound, setSelectedRound] = useState<string>('');
 
   useEffect(() => {
     if (!authLoading && (!user || role !== 'client')) {
@@ -96,6 +134,8 @@ export default function ClientDashboard() {
 
     if (clientData) {
       setClientProfile(clientData);
+      setSelectedSchools(clientData.target_schools || []);
+      setSelectedRound(clientData.application_round || '');
 
       // Fetch documents
       const { data: docsData } = await supabase
@@ -109,12 +149,46 @@ export default function ClientDashboard() {
       }
     }
 
+    // Fetch school deadlines
+    const { data: deadlinesData } = await supabase
+      .from('school_deadlines')
+      .select('*')
+      .order('deadline_date', { ascending: true });
+
+    if (deadlinesData) {
+      setDeadlines(deadlinesData);
+    }
+
     setLoading(false);
   };
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
+  };
+
+  const handleSaveSchools = async () => {
+    if (!clientProfile) return;
+
+    const { error } = await supabase
+      .from('clients')
+      .update({
+        target_schools: selectedSchools,
+        application_round: selectedRound,
+      })
+      .eq('id', clientProfile.id);
+
+    if (error) {
+      toast.error('Failed to save schools');
+    } else {
+      toast.success('Target schools updated');
+      setClientProfile({
+        ...clientProfile,
+        target_schools: selectedSchools,
+        application_round: selectedRound,
+      });
+      setIsEditingSchools(false);
+    }
   };
 
   const handleCreateDocument = async () => {
@@ -125,11 +199,13 @@ export default function ClientDashboard() {
 
     setSavingDocument(true);
 
+    const title = newDocSchool ? `${newDocSchool} - ${newDocTitle}` : newDocTitle;
+
     const { data, error } = await supabase
       .from('documents')
       .insert({
         client_id: clientProfile.id,
-        title: newDocTitle,
+        title: title,
         document_type: newDocType,
         content: '',
         status: 'draft',
@@ -145,6 +221,7 @@ export default function ClientDashboard() {
       setIsCreatingDocument(false);
       setNewDocTitle('');
       setNewDocType('');
+      setNewDocSchool('');
     }
 
     setSavingDocument(false);
@@ -194,6 +271,24 @@ export default function ClientDashboard() {
     }
   };
 
+  const getDaysUntilDeadline = (deadlineDate: string) => {
+    const today = new Date();
+    const deadline = new Date(deadlineDate);
+    const diffTime = deadline.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const getRelevantDeadlines = () => {
+    if (!clientProfile?.target_schools || !clientProfile.application_round) return [];
+
+    return deadlines.filter(
+      (d) =>
+        clientProfile.target_schools?.includes(d.school_name) &&
+        d.round_name.toLowerCase().includes(clientProfile.application_round?.toLowerCase().replace('round ', '') || '')
+    );
+  };
+
   const documentTypeLabels: Record<string, string> = {
     resume: 'Resume',
     lor: 'Letter of Recommendation',
@@ -213,10 +308,12 @@ export default function ClientDashboard() {
     );
   }
 
+  const relevantDeadlines = getRelevantDeadlines();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-primary text-primary-foreground">
+      <header className="bg-primary text-primary-foreground sticky top-0 z-40">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -235,6 +332,118 @@ export default function ClientDashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
+        {/* Deadlines Alert */}
+        {relevantDeadlines.length > 0 && (
+          <div className="mb-8">
+            <Card className="border-gold/30 bg-gold/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-gold" />
+                  Upcoming Deadlines
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {relevantDeadlines.slice(0, 6).map((deadline) => {
+                    const daysLeft = getDaysUntilDeadline(deadline.deadline_date);
+                    const isPast = daysLeft < 0;
+                    const isUrgent = daysLeft >= 0 && daysLeft <= 14;
+
+                    return (
+                      <div
+                        key={deadline.id}
+                        className={`p-4 rounded-lg border ${
+                          isPast
+                            ? 'bg-muted/50 border-muted'
+                            : isUrgent
+                            ? 'bg-destructive/10 border-destructive/30'
+                            : 'bg-background border-border'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{deadline.school_name}</p>
+                            <p className="text-xs text-muted-foreground">{deadline.round_name}</p>
+                          </div>
+                          {isUrgent && !isPast && (
+                            <AlertTriangle className="h-4 w-4 text-destructive" />
+                          )}
+                        </div>
+                        <div className="mt-2">
+                          {isPast ? (
+                            <span className="text-xs text-muted-foreground">Deadline passed</span>
+                          ) : (
+                            <span
+                              className={`text-lg font-bold ${
+                                isUrgent ? 'text-destructive' : 'text-foreground'
+                              }`}
+                            >
+                              {daysLeft} days left
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(deadline.deadline_date).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Target Schools Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5 text-gold" />
+                  Target Schools
+                </CardTitle>
+                <CardDescription>Manage your target business schools and application round</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setIsEditingSchools(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {clientProfile?.target_schools && clientProfile.target_schools.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {clientProfile.target_schools.map((school, idx) => (
+                    <Badge key={idx} variant="outline" className="bg-gold/10 text-gold border-gold/30 py-1.5">
+                      {school}
+                    </Badge>
+                  ))}
+                </div>
+                {clientProfile.application_round && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Target className="h-4 w-4" />
+                    <span>Targeting: {clientProfile.application_round}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <GraduationCap className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No target schools set yet</p>
+                <Button variant="gold" size="sm" className="mt-4" onClick={() => setIsEditingSchools(true)}>
+                  Add Target Schools
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -302,7 +511,7 @@ export default function ClientDashboard() {
           <TabsList className="bg-muted">
             <TabsTrigger value="documents">My Documents</TabsTrigger>
             <TabsTrigger value="stories">Stories Master File</TabsTrigger>
-            <TabsTrigger value="consultations">Consultations</TabsTrigger>
+            <TabsTrigger value="consultations">Book a Call</TabsTrigger>
           </TabsList>
 
           {/* Documents Tab */}
@@ -345,10 +554,27 @@ export default function ClientDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
+                        {newDocType === 'essay' && clientProfile?.target_schools && (
+                          <div>
+                            <Label>School (Optional)</Label>
+                            <Select value={newDocSchool} onValueChange={setNewDocSchool}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select school" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {clientProfile.target_schools.map((school) => (
+                                  <SelectItem key={school} value={school}>
+                                    {school}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                         <div>
                           <Label>Title</Label>
                           <Input
-                            placeholder="e.g., HBS Essay 1 - Leadership"
+                            placeholder="e.g., Essay 1 - Leadership Experience"
                             value={newDocTitle}
                             onChange={(e) => setNewDocTitle(e.target.value)}
                           />
@@ -378,7 +604,7 @@ export default function ClientDashboard() {
                     <p>No documents yet. Create your first document to get started.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {['resume', 'essay', 'lor', 'other'].map((type) => {
                       const typeDocs = getDocumentsByType(type);
                       if (typeDocs.length === 0) return null;
@@ -419,7 +645,7 @@ export default function ClientDashboard() {
                                     {doc.status}
                                   </Badge>
                                   {doc.feedback && (
-                                    <Badge variant="outline" className="bg-gold/10 text-gold">
+                                    <Badge variant="outline" className="bg-gold/10 text-gold border-gold/30">
                                       Has Feedback
                                     </Badge>
                                   )}
@@ -615,20 +841,104 @@ export default function ClientDashboard() {
           <TabsContent value="consultations">
             <Card>
               <CardHeader>
-                <CardTitle>Consultations</CardTitle>
-                <CardDescription>View your scheduled sessions with Ameya</CardDescription>
+                <CardTitle>Book a Consultation</CardTitle>
+                <CardDescription>Schedule a session with Ameya to discuss your application</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No consultations scheduled</p>
-                  <p className="text-sm">Contact Ameya to book your next session</p>
+                <div className="text-center py-12">
+                  <Calendar className="h-16 w-16 mx-auto mb-6 text-gold" />
+                  <h3 className="text-xl font-semibold mb-2">Ready to discuss your application?</h3>
+                  <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                    Book a one-on-one consultation with Ameya to review your essays, 
+                    discuss strategy, or get feedback on your application materials.
+                  </p>
+                  <Button
+                    variant="gold"
+                    size="lg"
+                    onClick={() => {
+                      // Placeholder for Calendly integration
+                      toast.info('Calendly integration coming soon! Contact Ameya directly to schedule.');
+                    }}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Schedule a Call
+                  </Button>
+                  <p className="text-sm text-muted-foreground mt-4">
+                    Calendly integration will be available soon
+                  </p>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Edit Schools Dialog */}
+      <Dialog open={isEditingSchools} onOpenChange={setIsEditingSchools}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Target Schools</DialogTitle>
+            <DialogDescription>Select your target business schools and application round</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 mt-4">
+            <div>
+              <Label className="mb-3 block">Target Round</Label>
+              <Select value={selectedRound} onValueChange={setSelectedRound}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your target round" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROUNDS.map((round) => (
+                    <SelectItem key={round} value={round}>
+                      {round}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="mb-3 block">Select Schools</Label>
+              <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto p-1">
+                {AVAILABLE_SCHOOLS.map((school) => (
+                  <button
+                    key={school}
+                    onClick={() => {
+                      if (selectedSchools.includes(school)) {
+                        setSelectedSchools(selectedSchools.filter((s) => s !== school));
+                      } else {
+                        setSelectedSchools([...selectedSchools, school]);
+                      }
+                    }}
+                    className={`flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-colors ${
+                      selectedSchools.includes(school)
+                        ? 'bg-gold/10 border-gold/50 text-gold'
+                        : 'bg-muted/50 border-border hover:bg-muted'
+                    }`}
+                  >
+                    {selectedSchools.includes(school) ? (
+                      <Check className="h-4 w-4 flex-shrink-0" />
+                    ) : (
+                      <div className="h-4 w-4 flex-shrink-0" />
+                    )}
+                    {school}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-4">
+              <Button variant="outline" onClick={() => setIsEditingSchools(false)}>
+                Cancel
+              </Button>
+              <Button variant="gold" onClick={handleSaveSchools}>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

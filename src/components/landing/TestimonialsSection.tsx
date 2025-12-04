@@ -65,11 +65,9 @@ export function TestimonialsSection() {
         {/* Testimonial Card */}
         <div className="max-w-4xl mx-auto">
           <div className="relative bg-primary-foreground/5 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-primary-foreground/10">
-            {/* Quote Icon */}
-            <Quote className="absolute top-8 left-8 h-12 w-12 text-gold/30" />
-
             {/* Content */}
             <div className="relative z-10 text-center">
+              <Quote className="h-10 w-10 text-gold mx-auto mb-6" />
               <p className="text-xl md:text-2xl text-primary-foreground leading-relaxed mb-8 font-display italic">
                 "{current.quote}"
               </p>

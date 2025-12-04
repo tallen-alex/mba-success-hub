@@ -29,14 +29,17 @@ export function Navbar() {
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         isScrolled
           ? 'bg-card/95 backdrop-blur-md shadow-elegant border-b border-border/50'
-          : 'bg-transparent'
+          : 'bg-primary/80 backdrop-blur-sm'
       )}
     >
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
-            <span className="font-display text-2xl font-bold text-primary">
+            <span className={cn(
+              "font-display text-2xl font-bold transition-colors",
+              isScrolled ? "text-primary" : "text-primary-foreground"
+            )}>
               Ameya Khullar
             </span>
           </Link>
@@ -47,7 +50,12 @@ export function Navbar() {
               <a
                 key={link.href}
                 href={link.href}
-                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
+                className={cn(
+                  "transition-colors font-medium",
+                  isScrolled 
+                    ? "text-muted-foreground hover:text-foreground" 
+                    : "text-primary-foreground/80 hover:text-primary-foreground"
+                )}
               >
                 {link.label}
               </a>
@@ -57,7 +65,10 @@ export function Navbar() {
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-4">
             <Link to="/auth">
-              <Button variant="ghost" className="font-medium">
+              <Button 
+                variant={isScrolled ? "ghost" : "heroOutline"} 
+                className="font-medium"
+              >
                 Sign In
               </Button>
             </Link>
@@ -74,9 +85,9 @@ export function Navbar() {
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? (
-              <X className="h-6 w-6 text-foreground" />
+              <X className={cn("h-6 w-6", isScrolled ? "text-foreground" : "text-primary-foreground")} />
             ) : (
-              <Menu className="h-6 w-6 text-foreground" />
+              <Menu className={cn("h-6 w-6", isScrolled ? "text-foreground" : "text-primary-foreground")} />
             )}
           </button>
         </div>
