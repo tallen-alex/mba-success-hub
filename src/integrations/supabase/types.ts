@@ -192,6 +192,30 @@ export type Database = {
         }
         Relationships: []
       }
+      school_deadlines: {
+        Row: {
+          created_at: string
+          deadline_date: string
+          id: string
+          round_name: string
+          school_name: string
+        }
+        Insert: {
+          created_at?: string
+          deadline_date: string
+          id?: string
+          round_name: string
+          school_name: string
+        }
+        Update: {
+          created_at?: string
+          deadline_date?: string
+          id?: string
+          round_name?: string
+          school_name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
