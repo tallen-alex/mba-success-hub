@@ -104,6 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user_id: data.user.id,
         });
       }
+
+      // Set the role immediately so redirect works
+      setRole(roleToAssign);
     }
 
     return { error: error as Error | null };
